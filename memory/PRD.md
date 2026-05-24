@@ -1,99 +1,66 @@
-# PRD — HeroUI Migration (Tailwind v4 + React 19 + HeroUI v3)
+# PRD — Full Migration: React 19 + HeroUI v3 + Tailwind v4 + RTK 2 + React Router 7
 
 ## Original problem statement
-Analyze repository `https://github.com/anujverma-eng/heroui-migration` (branch `migration`)
-and migrate it from:
+Migrate repo `https://github.com/anujverma-eng/heroui-migration` (branch `migration`) from:
 - React 18 → 19
 - HeroUI v2 → v3
 - Tailwind v3 → v4
-- (Redux Toolkit 1 → 2 — deferred)
-- (React Router 6 → 7 — deferred)
+- Redux Toolkit 1 → 2 (+ React-Redux 8 → 9)
+- React Router 6 → 7
 
-## User choices (gathered via ask_human)
-- Clone repo into `/app` for analysis: yes
-- Output format: single consolidated Markdown report (Phase 1)
-- Dependency graph: file-level + symbol-level
-- Effort estimation unit: default (t-shirt + hours)
-- Include breaking-changes summary per library: yes
-- Tailwind migration: proceed (HeroUI v2 untouched during it)
-- HeroUI migration: full migration "properly" — follow official v3 docs
-- React 19: bumped as prerequisite for HeroUI v3
-- Commit on existing `migration` branch
+## User choices
+- Phase 1 (analysis): Single Markdown report; symbol-level dependency graph; include
+  per-library breaking-changes summary.
+- Phase 2 (execution): proceed sequentially on existing `migration` branch; follow official
+  HeroUI v3 docs (not invented API names); full HeroUI swap (not side-by-side); React 19
+  prerequisite + RTK 2 + RR7 "properly".
 
-## Architecture / approach
-- Read-only analysis first; then execution in 3 sequential commits on `migration` branch:
-  1. Tailwind v3 → v4 (HeroUI v2 untouched)
-  2. React 18 → 19 (prereq for HeroUI v3)
-  3. HeroUI v2 → v3 (full swap, official v3 API)
-- Each commit verified with `vite build` + dev-server smoke test + page-error check
-- No backend / no testing-agent (read-only Vite/React project, not the FastAPI+React platform)
+## Approach
+Each library bumped in its own sequential commit on `migration` branch:
+1. Tailwind v4 (kept HeroUI v2 working via `hero.js` + `@plugin` CSS-first path)
+2. React 19 (deps + types only; no source changes)
+3. HeroUI v3 (full swap; component compound rewrites; class renames)
+4. React Router 7 (deps only; symbols preserved)
+5. RTK 2 + react-redux 9 (deps + v9 `withTypes()` hook idiom)
+
+Each commit verified end-to-end with `vite build` + dev-server + page-error capture +
+real form interaction (typing, tab switch, click validation).
 
 ## What's been implemented
 
-### 2026-01: Phase 1 — Analysis report
-- `/app/MIGRATION_MAP.md` — file-by-file dependency graph, HeroUI v2 usages, Tailwind v3 patterns,
-  risky files (4 tiers), migration order, effort per file (~25-40 dev-hours total), per-library
-  breaking-changes summary, cross-cutting issues.
+### 2026-01: Phase 1 — Analysis (already shipped)
+`/app/MIGRATION_MAP.md` — file-by-file graph, HeroUI v2 inventory, Tailwind v3 patterns,
+risky-file tiers, migration order, per-file effort, breaking-changes per library,
+cross-cutting issues (incl. case-sensitive `./footer` import + undefined `brand-*`).
 
-### 2026-01: Phase 2 — Execution (3 commits on `migration` branch)
+### 2026-01: Phase 2 — 5 sequential commits on `migration` branch
 
-#### Commit `bc85c4c` — feat(tailwind): migrate from v3 to v4
-- Replaced `tailwindcss@3` + `autoprefixer` + `@tailwindcss/cli` with `tailwindcss@4` +
-  `@tailwindcss/postcss`.
-- Deleted `tailwind.config.js`; introduced `hero.js` + `@plugin './hero.js'` + `@source` in CSS
-  (CSS-first per HeroUI v2 Tailwind-v4 compat guide).
-- `src/index.css`: `@tailwind base/components/utilities` → `@import 'tailwindcss';`
-  + `@custom-variant dark`.
-- Renamed v4-renamed utilities to preserve visual identity:
-  - `shadow-sm` → `shadow-xs` (Footer, LoginForm)
-  - `backdrop-blur-sm` → `backdrop-blur-xs` (FullScreenLoader)
-  - bare `backdrop-blur` → `backdrop-blur-sm` (8 occurrences)
-- Pre-existing case-sensitivity bug fixed (`./footer` → `./Footer` in PublicLayout).
-- Verified: build passes (246 kB CSS, vs 238 kB v3 baseline), dev server renders.
+| Commit | What | Notes |
+|---|---|---|
+| `bc85c4c` | Tailwind v3 → v4 | `tailwindcss@4` + `@tailwindcss/postcss`; deleted `tailwind.config.js`; CSS-first `hero.js` + `@plugin`. v4-renamed utilities updated (`shadow-sm`→`shadow-xs`, `backdrop-blur-sm`→`backdrop-blur-xs`, bare `backdrop-blur`→`backdrop-blur-sm`). HeroUI v2 untouched. Fixed pre-existing `./footer`→`./Footer` case bug. 246 kB CSS. |
+| `b40ba2d` | React 18 → 19 | `react`, `react-dom`, `@types/react`, `@types/react-dom` → ^19. No source changes (no `defaultProps`/`propTypes`/string refs/`findDOMNode`). |
+| `a9b16a6` | HeroUI v2 → v3 | New deps `@heroui/react@3` + `@heroui/styles`. Deleted `hero.js`. `@import '@heroui/styles'` replaces v2 plugin. `<HeroUIProvider>` removed, `<ToastProvider />` added. 7 components rewritten to v3 compound APIs: `Spinner` (was `CircularProgress`), `Card/CardContent` (was `Card/CardBody`), `Tabs > TabList > Tab + TabPanel`, `TextField + InputGroup + Label + FieldError` (was monolithic `Input`), `InputOTP*` compound, `Checkbox` compound, `Button` (`color` → `variant`), `Link` (no polymorphic `as`), `addToast` → `toast.danger/warning/success`. `validationState`→`isInvalid` ×4. Class renames: `primary*`→`accent*`, `content1`→`surface`, `divider`→`separator`, `default-{400–900}`→`muted`/`foreground`, warning numbered scales → `warning-soft*`. 388 kB CSS. |
+| `112a4b3` | React Router 6 → 7 | `react-router-dom` ^6 → ^7 + add `react-router@^7`. Zero source changes — symbols used (`createBrowserRouter`, `RouterProvider`, `Navigate`, `Outlet`, `useLocation`, `useNavigate`, `useSearchParams`, `Link`) are all signature-preserved. |
+| `15349b9` | Redux Toolkit 1 → 2, react-redux 8 → 9 | `@reduxjs/toolkit` ^1.9.7 → ^2.0.0, `react-redux` ^8.1.3 → ^9.0.0. `hooks/store.ts` migrated to v9 `useDispatch.withTypes()` + `useSelector.withTypes()` (replaces deprecated `TypedUseSelectorHook`). Slices unchanged (`configureStore`, `createSlice`, `createAsyncThunk`, `PayloadAction` all signature-preserved). |
 
-#### Commit `b40ba2d` — feat(react): bump React 18 → 19
-- `react` `^18.3.1` → `^19.0.0`, `react-dom` likewise, `@types/react(-dom)` → `^19`.
-- No source changes needed (no `defaultProps` / `propTypes` / string refs / `findDOMNode`).
-- Verified: build passes, /login renders, zero runtime errors. Prereq for HeroUI v3.
-
-#### Commit `a9b16a6` — feat(heroui): migrate v2 → v3 (full swap)
-- Deps: `@heroui/react@2` + `@heroui/use-theme` + `@tailwindcss/vite` removed; added
-  `@heroui/react@3` + `@heroui/styles`. `hero.js` deleted.
-- CSS: `@plugin './hero.js' + @source` collapsed to a single `@import '@heroui/styles';`.
-- Providers: `<HeroUIProvider>` removed; `<ToastProvider />` added for toast queue.
-- Component rewrites (official v3 API):
-  - `CircularProgress` → `Spinner` (`color="primary"` → `color="accent"`).
-  - `Card`/`CardBody` → `Card`/`CardContent` (compound).
-  - `Tabs` → compound (`Tabs > TabList > Tab` + `TabPanel`); slot `classNames` removed.
-  - `Input` (label/placeholder/startContent/endContent/errorMessage/validationState) →
-    `TextField` + `Label` + `InputGroup`{Prefix, Input, Suffix} + `FieldError` compound.
-  - `InputOtp` → `InputOTP` + `InputOTPGroup` + `InputOTPSlot` (compound; `maxLength`/`onChange`).
-  - `Checkbox` → compound (`CheckboxControl` + `CheckboxIndicator` + `CheckboxContent`);
-    `validationState="invalid"` → `isInvalid` (×4 in RegisterForm); `onValueChange` → `onChange`.
-  - `Link` → drops `color`, `size`, polymorphic `as={RouterLink}` (now wrap with RouterLink).
-  - `Button` → drops `color`; `color="primary"` → `variant="primary"`; `variant="light"` →
-    `variant="ghost"`.
-  - `addToast({title,description,color})` → `toast.danger/warning/success(title, {description})`.
-- Class renames (v3 token system, no numbered scales):
-  - `bg/text-primary*` → `bg/text-accent` (+ `bg-accent-soft` for `primary/10` backgrounds)
-  - `bg-content1` → `bg-surface`
-  - `border/bg-divider` → `border/bg-separator`
-  - `text-default-{400-600}` → `text-muted`; `text-default-{700,900}` → `text-foreground`
-  - `bg-warning-{50,100}` → `bg-warning-soft`; `text-warning-{700,800}` → `text-warning-soft-foreground`;
-    `border-warning-*` → `border-warning`; dark warning classes collapsed (soft auto-adapts).
-- Verified: vite build passes (388 kB CSS), dev server renders /login & /login?tab=signup,
-  form fields interactive (typing highlights, password toggle, checkbox), zero runtime errors.
+## Verification (final state)
+- `vite build` passes (388 kB CSS, ~970 kB JS).
+- Dev server: `/login`, `/login?tab=signup`, `/404` all return HTTP 200 with **zero page errors**.
+- Functional smoke tests on final stack:
+  - Login form renders with all fields, prefix icons, password visibility toggle, submit button.
+  - Empty submit triggers validation → fields turn red (react-aria invalid state from Redux validation).
+  - Tab switch (Sign In ↔ Create Account) works → confirms `useAppSelector` + `useAppDispatch` v9 hooks.
+  - Create Account form renders Full Name / Email / Password / Confirm + Terms checkbox + links.
+  - Typing into Email highlights the field with accent ring.
+  - Router renders 404 page on unknown routes.
 
 ## Files
-- `/app/MIGRATION_MAP.md` — Phase 1 analysis report (still relevant as reference)
-- `/app/heroui-migration/` — cloned repo, branch `migration`, 3 new commits on top
+- `/app/MIGRATION_MAP.md` — Phase 1 analysis (reference).
+- `/app/heroui-migration/` — branch `migration`, 5 new commits on top of `950984c`.
 
 ## Backlog / next actions
-- P1 (deferred from original migration plan):
-  - React Router 6 → 7 (12 source files; symbol-compatible, mostly package rename)
-  - Redux Toolkit 1 → 2 + React-Redux 8 → 9 (5 files; API-compatible for the symbols used here)
-- P2 polish (not requested):
-  - Replace `framer-motion` with `motion` (rebranded successor) for parity with HeroUI v3 internals
-  - Full visual regression pass against a v2 baseline (v3 has its own visual language)
-  - Re-enable `tsconfig.app.json` strictness (pre-existing TS errors unrelated to migration)
-  - Wire real Cognito env vars (a stub `.env` was used only for migration smoke tests)
+- (Optional polish) Replace `framer-motion` → `motion` (rebranded successor; HeroUI v3 dropped framer-motion internally; our app code still uses it in 3 files).
+- (Optional polish) Resolve pre-existing `bg-brand-*` undefined classes in NotFoundPage, UnauthorizedPage, ErrorBoundary, PermissionRoute (already flagged in Phase 1 report).
+- (Optional polish) Re-enable strict TS options in `tsconfig.app.json` (pre-existing `baseUrl` TS5101 error blocks `tsc -b`; `vite build` already passes).
+- (Optional) Wire real Cognito env vars (stub `.env` only used for migration smoke tests; never committed).
+- (Optional) Migrate `react-router-dom` imports → `react-router` to match v7 idioms (functionally equivalent; left as `react-router-dom` to minimize diff).
